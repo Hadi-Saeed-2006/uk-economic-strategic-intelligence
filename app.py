@@ -1,3 +1,4 @@
+import pandas as pd
 import streamlit as st
 import plotly.express as px
 
@@ -18,7 +19,7 @@ except Exception as exc:
 latest = df.iloc[-1]
 prev = df.iloc[-2]
 
-st.info("**Data status:** 2025 annual indicators are used where annual data is appropriate. Some indicators represent different reference periods; see the methodology panel and SOURCES.md before interpreting cross-series comparisons.")
+st.info("**Data status:** 2025 annual indicators are used where annual data is appropriate. Regional labour data uses ONS rolling three-month LFS estimates; source periods are shown explicitly.")
 
 c1, c2, c3, c4, c5 = st.columns(5)
 c1.metric("GDP growth", f"{latest.gdp_growth_pct:.1f}%", f"{latest.gdp_growth_pct - prev.gdp_growth_pct:+.1f} pp")
@@ -26,7 +27,31 @@ c2.metric("CPI", f"{latest.cpi_pct:.1f}%", f"{latest.cpi_pct - prev.cpi_pct:+.1f
 c3.metric("Unemployment", f"{latest.unemployment_pct:.1f}%", f"{latest.unemployment_pct - prev.unemployment_pct:+.1f} pp")
 c4.metric("Bank Rate", f"{latest.bank_rate_pct:.2f}%", f"{latest.bank_rate_pct - prev.bank_rate_pct:+.2f} pp")
 c5.metric("Strategic balance", f"{latest.strategic_balance:.1f}/100")
-st.caption("Reference year: 2025 for the displayed baseline. Bank Rate and exchange rates are source-period indicators rather than economic-year averages unless explicitly stated.")
+st.caption("Reference year: 2025 for the displayed macro baseline. Financial indicators retain their source-period definitions.")
+
+st.divider()
+
+st.subheader("🗺️ UK 4D Regional Intelligence Map")
+st.caption("4D = geographic position + indicator intensity + time. The current prototype animates official ONS regional labour-market observations between January–March 2025 and February–April 2026.")
+
+try:
+    regional = pd.read_csv("data/uk_regional_map.csv")
+    map_metric = st.selectbox("Map intelligence layer", ["unemployment_rate_pct", "employment_rate_pct", "inactivity_rate_pct"], format_func=lambda x: {"unemployment_rate_pct": "Unemployment rate (%)", "employment_rate_pct": "Employment rate (%)", "inactivity_rate_pct": "Economic inactivity rate (%)"}[x])
+    regional["metric"] = regional[map_metric]
+    regional["period"] = pd.Categorical(regional["period"], categories=["2025 Q1", "2026 Q2"], ordered=True)
+    fig_map = px.scatter_geo(
+        regional.sort_values("period"), lat="latitude", lon="longitude", color="metric", size="metric",
+        animation_frame="period", hover_name="region",
+        hover_data={"metric": ":.1f", "employment_rate_pct": ":.1f", "unemployment_rate_pct": ":.1f", "inactivity_rate_pct": ":.1f", "latitude": False, "longitude": False},
+        scope="europe", projection="mercator", center={"lat": 54.5, "lon": -2.5}, zoom=4.8,
+        title="UK regional labour-market intelligence over time"
+    )
+    fig_map.update_geos(showland=True, showcountries=True, showcoastlines=True, fitbounds=False)
+    fig_map.update_layout(height=650, margin={"l": 0, "r": 0, "t": 60, "b": 0})
+    st.plotly_chart(fig_map, use_container_width=True)
+    st.caption("Source: Office for National Statistics Labour Force Survey. Regional LFS estimates are official statistics in development and contain sampling uncertainty; short-term movements should be interpreted cautiously.")
+except Exception as exc:
+    st.warning(f"Regional map unavailable: {exc}")
 
 st.divider()
 
@@ -59,4 +84,4 @@ else:
 with st.expander("Methodology, sources & data integrity"):
     st.write("Opportunity, pressure and strategic-balance scores are model-derived indicators, not official statistics. They normalize the available historical baseline and should not be interpreted as forecasts or government assessments.")
     st.write("Primary sources: Office for National Statistics (ONS) and Bank of England (BoE). International context: World Bank, IMF and OECD. See data/SOURCES.md for the source registry and reference-period notes.")
-    st.write("The dashboard intentionally distinguishes annual economic measures from point-in-time or source-period financial indicators. This prevents false precision when combining series with different statistical reference periods.")
+    st.write("The 4D map uses regional ONS LFS labour-market observations. ONS classifies these as official statistics in development and notes sampling variability, so the map is an analytical visualization rather than a precise regional forecast.")
