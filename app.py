@@ -32,26 +32,52 @@ st.caption("Reference year: 2025 for the displayed macro baseline. Financial ind
 st.divider()
 
 st.subheader("🗺️ UK 4D Regional Intelligence Map")
-st.caption("4D = geographic position + indicator intensity + time. The current prototype animates official ONS regional labour-market observations between January–March 2025 and February–April 2026.")
+st.caption("4D = geographic position + indicator intensity + time. Use the animation controls to move between ONS regional labour-market periods.")
 
 try:
     regional = pd.read_csv("data/uk_regional_map.csv")
-    map_metric = st.selectbox("Map intelligence layer", ["unemployment_rate_pct", "employment_rate_pct", "inactivity_rate_pct"], format_func=lambda x: {"unemployment_rate_pct": "Unemployment rate (%)", "employment_rate_pct": "Employment rate (%)", "inactivity_rate_pct": "Economic inactivity rate (%)"}[x])
-    regional["metric"] = regional[map_metric]
-    regional["period"] = pd.Categorical(regional["period"], categories=["2025 Q1", "2026 Q2"], ordered=True)
-    fig_map = px.scatter_geo(
-        regional.sort_values("period"), lat="latitude", lon="longitude", color="metric", size="metric",
-        animation_frame="period", hover_name="region",
-        hover_data={"metric": ":.1f", "employment_rate_pct": ":.1f", "unemployment_rate_pct": ":.1f", "inactivity_rate_pct": ":.1f", "latitude": False, "longitude": False},
-        scope="europe", projection="mercator", center={"lat": 54.5, "lon": -2.5}, zoom=4.8,
-        title="UK regional labour-market intelligence over time"
+    required = {"period", "region", "employment_rate_pct", "unemployment_rate_pct", "inactivity_rate_pct", "latitude", "longitude"}
+    missing = required - set(regional.columns)
+    if missing:
+        raise ValueError(f"Missing map columns: {sorted(missing)}")
+
+    map_metric = st.selectbox(
+        "Map intelligence layer",
+        ["unemployment_rate_pct", "employment_rate_pct", "inactivity_rate_pct"],
+        format_func=lambda x: {"unemployment_rate_pct": "Unemployment rate (%)", "employment_rate_pct": "Employment rate (%)", "inactivity_rate_pct": "Economic inactivity rate (%)"}[x],
     )
-    fig_map.update_geos(showland=True, showcountries=True, showcoastlines=True, fitbounds=False)
-    fig_map.update_layout(height=650, margin={"l": 0, "r": 0, "t": 60, "b": 0})
+    regional["period"] = regional["period"].astype(str)
+    regional["metric"] = regional[map_metric]
+
+    # MapLibre-based scatter_map is more robust on Streamlit Cloud than the older geo renderer.
+    fig_map = px.scatter_map(
+        regional.sort_values("period"),
+        lat="latitude",
+        lon="longitude",
+        color="metric",
+        size="metric",
+        animation_frame="period",
+        animation_group="region",
+        hover_name="region",
+        hover_data={
+            "metric": ":.1f",
+            "employment_rate_pct": ":.1f",
+            "unemployment_rate_pct": ":.1f",
+            "inactivity_rate_pct": ":.1f",
+            "latitude": False,
+            "longitude": False,
+        },
+        zoom=4.6,
+        center={"lat": 54.5, "lon": -2.5},
+        height=650,
+        title="UK regional labour-market intelligence over time",
+    )
+    fig_map.update_layout(margin={"l": 0, "r": 0, "t": 60, "b": 0})
+    fig_map.update_traces(marker={"opacity": 0.85})
     st.plotly_chart(fig_map, use_container_width=True)
     st.caption("Source: Office for National Statistics Labour Force Survey. Regional LFS estimates are official statistics in development and contain sampling uncertainty; short-term movements should be interpreted cautiously.")
 except Exception as exc:
-    st.warning(f"Regional map unavailable: {exc}")
+    st.error(f"Regional 4D map could not be rendered: {exc}")
 
 st.divider()
 
