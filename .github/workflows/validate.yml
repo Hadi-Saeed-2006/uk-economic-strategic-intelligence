@@ -1,0 +1,31 @@
+name: Validate UK Intelligence
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Compile Python
+        run: python -m compileall app.py src
+      - name: Validate dataset
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          df = pd.read_csv('data/uk_macro.csv')
+          required = {'year','gdp_growth_pct','cpi_pct','unemployment_pct','employment_pct','average_weekly_earnings_growth_pct','bank_rate_pct','gbp_usd','gbp_eur','productivity_growth_pct','trade_balance_gbp_bn','public_sector_net_debt_pct_gdp'}
+          missing = required - set(df.columns)
+          assert not missing, f'Missing columns: {sorted(missing)}'
+          assert df['year'].is_unique, 'Years must be unique'
+          assert len(df) >= 5, 'Expected at least five annual observations'
+          print(f'Validation passed: {len(df)} annual observations')
+          PY
